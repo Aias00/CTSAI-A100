@@ -208,7 +208,7 @@ class KalmanTracker:
         return track
 
     def track(self, df):
-        if not self.enable_tracking.get() or df.empty:
+        if not self.enable_tracking.get():
             df['track_id'] = df['ObjId'] if 'ObjId' in df.columns else range(len(df))
             return df
         
@@ -373,6 +373,10 @@ class RadarPlayer(tk.Tk):
         self.current = 0
         self.playing = False
         self.timer = None
+        self._last_tracking_frame = None
+        self._last_tracking_input = None
+        self._last_tracking_result = None
+        self._last_tracking_options = None
 
         # 绘图对象
         self.fig = None
@@ -398,6 +402,7 @@ class RadarPlayer(tk.Tk):
         try:
             # 重置跟踪器和轨迹
             self.tracker.reset()
+            self._last_tracking_frame = None
             self.trajectory.reset()
             
             self.parser = RadarParser(path)
@@ -617,6 +622,7 @@ class RadarPlayer(tk.Tk):
 
     def _reset_tracker(self):
         self.tracker.reset()
+        self._last_tracking_frame = None
         self.update_frame()
 
     def _setup_cluster_tab(self, parent):
@@ -690,6 +696,28 @@ class RadarPlayer(tk.Tk):
             self.cbar = self.fig.colorbar(self.scatter, ax=self.ax, label='目标距离 (m)')
         self.canvas.draw()
 
+    def _track_frame(self, df):
+        """Advance tracking once per data frame; repaint from a cached copy."""
+        options = (self.tracker.enable_tracking.get(),
+                   self.tracker.match_thresh.get(),
+                   self.tracker.max_lost_frames.get())
+        same_options = options == self._last_tracking_options
+        if (self.current == self._last_tracking_frame and same_options
+                and df.equals(self._last_tracking_input)):
+            return self._last_tracking_result.copy()
+
+        index = self.fns.index(self.current)
+        follows_previous = index > 0 and self.fns[index - 1] == self._last_tracking_frame
+        if not follows_previous or not same_options:
+            # Seeking or changing the input/model starts a new trajectory.
+            self.tracker.reset()
+        result = self.tracker.track(df.copy())
+        self._last_tracking_frame = self.current
+        self._last_tracking_input = df.copy()
+        self._last_tracking_result = result.copy()
+        self._last_tracking_options = options
+        return result
+
     def update_frame(self):
         if not self.parser or not self.fns:
             return
@@ -702,7 +730,7 @@ class RadarPlayer(tk.Tk):
         df_filtered = self.filter.apply(df_raw)
 
         # 3. 应用目标跟踪
-        df_tracked = self.tracker.track(df_filtered)
+        df_tracked = self._track_frame(df_filtered)
 
         # 4. 应用聚类
         df_clustered = self.cluster.cluster(df_tracked)
