@@ -176,7 +176,10 @@ class KalmanTracker:
         self.max_lost_frames = IntVar(value=3)    # 最大丢失帧数
         self.next_id = 0
         self.tracked_targets = {}  # {track_id: {'state': 卡尔曼状态, 'lost_frames': 丢失帧数, 'history': 历史坐标}}
-        self.dt = 0.1  # 帧间隔时间
+        self.dt = 0.1  # Fallback only when capture timestamps are unavailable.
+        self.measurement_timestamp = None
+        self._previous_timestamp = None
+        self.acceleration_variance = 4.0
 
     def _init_kalman(self, x, y, vx=0, vy=0):
         # 匀速运动模型：状态向量 [x, y, vx, vy]
@@ -188,11 +191,44 @@ class KalmanTracker:
                       [0, 1, 0, 0]])  # 观测矩阵
         P = np.eye(4) * 1000  # 初始协方差矩阵
         R = np.eye(2) * 0.1  # 观测噪声协方差
-        Q = np.eye(4) * 0.01  # 过程噪声协方差
+        Q = self._process_noise()
         x0 = np.array([x, y, vx, vy])  # 初始状态
         return {'F': F, 'H': H, 'P': P, 'R': R, 'Q': Q, 'x': x0}
 
+    def _process_noise(self):
+        # Independent white acceleration per axis over the capture interval.
+        dt = self.dt
+        G = np.array([[dt*dt/2, 0], [0, dt*dt/2], [dt, 0], [0, dt]])
+        return self.acceleration_variance * (G @ G.T)
+
+    def _update_capture_interval(self):
+        timestamp = self.measurement_timestamp
+        if isinstance(timestamp, str):
+            try:
+                timestamp = datetime.fromisoformat(timestamp)
+            except ValueError:
+                timestamp = None
+        if not isinstance(timestamp, datetime) or pd.isna(timestamp):
+            timestamp = None
+        previous = self._previous_timestamp
+        self.dt = 0.1
+        if previous is not None and timestamp is not None:
+            try:
+                delta = (timestamp - previous).total_seconds()
+            except TypeError:  # Mixed timezone-aware and naive timestamps.
+                self.tracked_targets = {}
+            else:
+                if np.isfinite(delta) and delta > 0:
+                    self.dt = delta
+                else:
+                    # Clock reset/duplicate cannot advance a physical trajectory.
+                    self.tracked_targets = {}
+        self._previous_timestamp = timestamp
+
     def _predict(self, track):
+        track['F'][0, 2] = self.dt
+        track['F'][1, 3] = self.dt
+        track['Q'] = self._process_noise()
         # 卡尔曼预测
         track['x'] = track['F'] @ track['x']
         track['P'] = track['F'] @ track['P'] @ track['F'].T + track['Q']
@@ -212,6 +248,7 @@ class KalmanTracker:
             df['track_id'] = df['ObjId'] if 'ObjId' in df.columns else range(len(df))
             return df
         
+        self._update_capture_interval()
         current_points = df[['X', 'Y']].values
         current_ids = []
 
@@ -275,6 +312,8 @@ class KalmanTracker:
         """重置跟踪器状态"""
         self.next_id = 0
         self.tracked_targets = {}
+        self._previous_timestamp = None
+        self.dt = 0.1
 
 # ---------------------- 4. DBSCAN目标聚类器 ----------------------
 class RadarCluster:
@@ -697,6 +736,7 @@ class RadarPlayer(tk.Tk):
         # 1. 获取原始帧数据
         df_raw = self.parser.get_frame(self.current)
         info = self.parser.frame_index[self.current]
+        self.tracker.measurement_timestamp = info['ts']
 
         # 2. 应用筛选
         df_filtered = self.filter.apply(df_raw)
