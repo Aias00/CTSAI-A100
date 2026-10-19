@@ -5,10 +5,8 @@ function virtualCube = organize_virtual_array(rangeRxCube, cfg, layout)
 %
 % SISO: no slow-time deinterleaving; physical-TX geometry is still mapped.
 % TDM: chirp groups are selected using block or interleaved layout.
-% DDMA: each simultaneously enabled TX is demodulated using an explicit
-%       per-TX phase increment from the configuration.
-% BPM or unresolved simultaneous-TX modes are rejected instead of being
-% silently treated as TDM.
+% DDMA/BPM require TX separation that is not implemented here. Even known
+% DDMA phase increments only shift the mixture and cannot isolate each TX.
 
 if nargin < 3 || isempty(layout)
     layout = 'block';
@@ -22,8 +20,13 @@ end
 
 mode = upper(cfg.mimo.mode);
 switch mode
-    case {'SISO', 'TDM', 'DDMA'}
+    case {'SISO', 'TDM'}
         % Supported below.
+    case 'DDMA'
+        error('CTSAI:DDMASeparationUnsupported', ...
+            ['DDMA TX separation and valid velocity-band constraints are ' ...
+            'not implemented. Phase de-rotation alone leaves other TX ' ...
+            'components in every channel; refusing physical velocity/angle output.']);
     case 'BPM_UNSUPPORTED'
         error(['bpm_mode is enabled, but this project does not have the ' ...
             'firmware BPM code sequence required for exact decoding.']);
@@ -48,22 +51,8 @@ for iGroup = 1:cfg.mimo.group_count
     txList = cfg.mimo.group_tx_indices{iGroup};
 
     for iTxList = 1:numel(txList)
-        physicalTx = txList(iTxList);
         channelIdx = channel + (1:cfg.num_rx);
-        if strcmp(mode, 'DDMA')
-            phaseStep = cfg.mimo.ddma_phase_step_deg_by_tx(physicalTx);
-            initialPhase = cfg.mimo.ddma_initial_phase_deg_by_tx(physicalTx);
-            if isnan(phaseStep) || isinf(phaseStep)
-                error('Missing DDMA phase increment for physical TX%d.', physicalTx);
-            end
-            slowIndex = 0:nSlow-1;
-            demodulation = exp(-1i * deg2rad(initialPhase + ...
-                phaseStep * slowIndex));
-            virtualCube(:, :, channelIdx) = groupCube .* ...
-                reshape(demodulation, 1, nSlow, 1);
-        else
-            virtualCube(:, :, channelIdx) = groupCube;
-        end
+        virtualCube(:, :, channelIdx) = groupCube;
         channel = channel + cfg.num_rx;
     end
 end

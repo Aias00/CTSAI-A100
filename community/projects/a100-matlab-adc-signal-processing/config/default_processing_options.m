@@ -6,9 +6,9 @@ opts.profile_id = 0; % Example TXT files are profile 0 (Pf0).
 opts.io.strict_header = true;
 opts.io.allow_zero_pad = false;
 opts.io.tx_chirp_layout = 'block'; % Chirp-group layout: 'block' or 'interleaved'.
-% The supplied profiles are SISO. DDMA is enabled only when the HXX file
-% explicitly defines per-TX phase increments or Doppler offsets;
-% tx_phase_value is never guessed to be a DDMA phase ramp.
+% The supplied profiles are SISO. Explicit DDMA metadata is recognized,
+% but DDMA execution is rejected until TX separation and valid velocity
+% bands are implemented; phase de-rotation alone does not isolate TX.
 
 opts.range_fft.window = 'hann';
 opts.range_fft.remove_adc_mean = true;

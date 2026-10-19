@@ -45,7 +45,7 @@ main.m
   ├─ derive_radar_parameters
   ├─ load_adc_dataset / unpack_uint32_adc
   ├─ range_fft
-  ├─ organize_virtual_array（TDM分组 / 显式DDMA解调）
+  ├─ organize_virtual_array（SISO/TDM分组，DDMA拒绝执行）
   ├─ suppress_clutter
   ├─ doppler_fft
   ├─ cfar_2d / vi_cfar_map / extract_detections
@@ -98,7 +98,7 @@ adcCube(sample, slow_time_chirp, channel)
 
 TDM-MIMO 配置下，Range FFT 后的复数数据由 `organize_virtual_array.m` 按 `block` 或 `interleaved` 方式拆分 chirp group，再按物理 TX×RX 展开虚拟通道。
 
-显式 DDMA 配置下，同一 group 内的多个 TX 会按配置给出的逐 chirp 相位增量解调；若同时发射但配置未给出 DDMA/BPM 编码，程序会停止而不是猜测。
+显式 DDMA 配置仅可被识别；当前实现没有 TX 分离与有效速度带宽约束，即使给出逐 TX 相位增量也会拒绝执行，避免把串扰峰报告为物理目标。SISO/TDM 继续可用。
 
 随附四个 profile 均为单 TX、4 RX。Pf0/Pf2 使用物理 TX3，对应 `ant_pos`/`ant_comps` 第 9–12 项；Pf1/Pf3 使用物理 TX1，对应第 1–4 项。
 
@@ -146,7 +146,7 @@ rangeCube(range, slow_time_chirp, virtual_channel)
 
 ## 7.1 DDMA 严格处理边界
 
-本工程不会把 `tx_phase_value`、相位扰码或 chirp shifting 自动解释成 DDMA。只有 HXX 明确提供 `ddma_phase_increment_deg`（或等价 Doppler offset）时才启用 DDMA解调。当前随附配置没有这些字段，也没有同时启用多个 TX，因此严格模式为 SISO。详见 `DDMA_MIMO_REPAIR.md`。
+本工程不会把 `tx_phase_value`、相位扰码或 chirp shifting 自动解释成 DDMA。HXX 明确提供 `ddma_phase_increment_deg`（或等价 Doppler offset）时可识别 DDMA，但执行会报 `CTSAI:DDMASeparationUnsupported`，直到 TX 分离与有效速度频带约束被实现。当前随附配置没有这些字段，也没有同时启用多个 TX，因此严格模式为 SISO。详见 `DDMA_MIMO_REPAIR.md`。
 
 ## 8. Doppler FFT 原理
 

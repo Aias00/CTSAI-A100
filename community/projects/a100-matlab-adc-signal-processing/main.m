@@ -1,6 +1,6 @@
 %% CTSAI-A100 MATLAB Signal Processing Example
 % Unified entry point:
-% ADC parsing -> Range FFT -> MIMO organization/DDMA demodulation ->
+% ADC parsing -> Range FFT -> SISO/TDM organization (DDMA guarded) ->
 % clutter suppression -> Doppler FFT -> adaptive CFAR -> sub-bin -> DOA.
 clear; clc; close all;
 
@@ -36,9 +36,8 @@ fprintf('Raw ADC cube: samples=%d, raw chirps=%d, RX=%d\n', ...
     size(adcRxCube, 1), size(adcRxCube, 2), size(adcRxCube, 3));
 
 %% 3. Range FFT, then mode-correct virtual-array construction
-% DDMA phase demodulation must operate on complex Range-FFT data. Doing the
-% virtual-array step before Range FFT would rotate real ADC samples and is
-% therefore not valid for general DDMA waveforms.
+% Virtual-array construction supports SISO/TDM. DDMA is rejected because
+% phase de-rotation alone cannot separate simultaneously transmitted signals.
 [rangeRxCube, ~] = range_fft(adcRxCube, radarCfg, opts.range_fft);
 rangeCube = organize_virtual_array(rangeRxCube, radarCfg, ...
     opts.io.tx_chirp_layout);

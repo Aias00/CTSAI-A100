@@ -52,7 +52,7 @@ community/projects/a100-matlab-adc-signal-processing/
 
 ## MIMO / DDMA 修复说明
 
-本代码严格解码 `tx_groups` 并按物理 TX 选择对应天线坐标。随附 Pf0/Pf2 为 TX3 单发，Pf1/Pf3 为 TX1 单发，均不是 DDMA。若配置明确提供逐 TX DDMA 相位增量或 Doppler offset，处理链会在 Range FFT 后解调；编码不明确的同时发射配置会直接报错，不会猜测。详见 [docs/DDMA_MIMO_REPAIR.md](docs/DDMA_MIMO_REPAIR.md)。
+本代码严格解码 `tx_groups` 并按物理 TX 选择对应天线坐标。随附 Pf0/Pf2 为 TX3 单发，Pf1/Pf3 为 TX1 单发，均不是 DDMA。显式逐 TX DDMA 相位增量或 Doppler offset 仅用于识别配置；本工程尚未实现 TX 分离和有效速度频带约束，因此显式 DDMA、BPM 和编码不明确的同时发射配置均会报错，不输出不可靠的速度或角度。详见 [docs/DDMA_MIMO_REPAIR.md](docs/DDMA_MIMO_REPAIR.md)。
 
 运行配置测试：
 

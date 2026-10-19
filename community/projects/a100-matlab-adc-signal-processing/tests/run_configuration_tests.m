@@ -34,7 +34,7 @@ virtual = organize_virtual_array(raw, cfg, 'block');
 assert(all(reshape(virtual(:,:,1:4) == 11, [], 1)));
 assert(all(reshape(virtual(:,:,5:8) == 22, [], 1)));
 
-% Synthetic two-TX DDMA. Explicit phase increments are required.
+% Synthetic two-TX DDMA: explicit phase increments do not isolate TX.
 cfg = load_ctsaia100_config(fullfile(projectRoot, 'config', ...
     'sensor_config_init0.hxx'));
 cfg.tx_groups = [1, 1, 0, 0];
@@ -48,11 +48,13 @@ a1 = 2;
 a2 = 3;
 mixture = a1 + a2 * exp(1i * deg2rad(90*n));
 raw = repmat(reshape(mixture, 1, [], 1), 1, 1, cfg.num_rx);
-virtual = organize_virtual_array(raw, cfg, 'block');
-tx1Spectrum = fft(virtual(:,:,1), [], 2);
-tx2Spectrum = fft(virtual(:,:,5), [], 2);
-assert(abs(tx1Spectrum(1)) > abs(a1*cfg.nchirp) - 1e-9);
-assert(abs(tx2Spectrum(1)) > abs(a2*cfg.nchirp) - 1e-9);
+rejected = false;
+try
+    organize_virtual_array(raw, cfg, 'block');
+catch err
+    rejected = strcmp(err.identifier, 'CTSAI:DDMASeparationUnsupported');
+end
+assert(rejected, 'Known DDMA phase steps do not imply supported TX separation.');
 
 % Simultaneous TX without an explicit code must be rejected.
 cfg = rmfield(cfg, 'ddma_phase_increment_deg');
