@@ -3,6 +3,7 @@ function [detections, diagnostics] = estimate_angles_for_detections( ...
 %ESTIMATE_ANGLES_FOR_DETECTIONS Run four DOA methods for every detection.
 diagnostics = [];
 if isempty(detections)
+    detections.AngleFFTMethod = cell(0,1);
     detections.AngleFFT_deg = zeros(0,1);
     detections.DML_deg = zeros(0,1);
     detections.MUSIC_deg = zeros(0,1);
@@ -23,6 +24,7 @@ numChannels = size(rdCube, 3);
 [positionsLambda, phaseErrorDeg] = get_array_geometry(cfg, numChannels);
 dictionary = steering_dictionary(positionsLambda, angleGrid);
 
+angleFFTMethod = cell(height(detections),1);
 angleFFT = zeros(height(detections),1);
 angleDML = zeros(height(detections),1);
 angleMUSIC = zeros(height(detections),1);
@@ -49,6 +51,7 @@ for iDetection = 1:height(detections)
     musicResult = estimate_angle_music(localSnapshots, dictionary, angleGrid, angleOpts);
     ompResult = estimate_angle_omp(snapshot, dictionary, angleGrid, angleOpts);
 
+    angleFFTMethod{iDetection} = fftResult.method;
     angleFFT(iDetection) = fftResult.angle_deg;
     angleDML(iDetection) = dmlResult.angle_deg;
     angleMUSIC(iDetection) = musicResult.angle_deg;
@@ -56,6 +59,7 @@ for iDetection = 1:height(detections)
 
     if iDetection == 1
         diagnostics.angle_grid_deg = angleGrid;
+        diagnostics.angle_fft_method = fftResult.method;
         diagnostics.angle_fft_spectrum = fftResult.spectrum;
         diagnostics.dml_spectrum = dmlResult.spectrum;
         diagnostics.music_spectrum = musicResult.spectrum;
@@ -70,6 +74,7 @@ for iDetection = 1:height(detections)
     end
 end
 
+detections.AngleFFTMethod = angleFFTMethod;
 detections.AngleFFT_deg = angleFFT;
 detections.DML_deg = angleDML;
 detections.MUSIC_deg = angleMUSIC;

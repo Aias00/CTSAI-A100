@@ -4,6 +4,17 @@ function result = estimate_angle_fft(snapshot, positionsLambda, angleGridDeg, an
 snapshot = snapshot(order);
 d = angleOpts.fft_grid_spacing_lambda;
 gridIndex = round((positions - min(positions)) / d) + 1;
+% Spatial FFT requires actual positions to lie on the assumed lattice.
+residual = abs((positions-min(positions)) - (gridIndex-1)*d);
+if any(residual > 1e-8)
+    dictionary = steering_dictionary(positions, angleGridDeg);
+    spectrum = abs(dictionary' * snapshot(:)).^2;
+    [~, iPeak] = max(spectrum);
+    result.angle_deg = angleGridDeg(iPeak);
+    result.spectrum = spectrum(:).';
+    result.method = 'GEOMETRY_SCAN';
+    return;
+end
 numGrid = max(gridIndex);
 gridded = zeros(numGrid, 1);
 counts = zeros(numGrid, 1);
@@ -25,4 +36,5 @@ spectrum = interp1(fftAngles, fftSpectrum, angleGridDeg, 'linear', 0);
 [~, iPeak] = max(spectrum);
 result.angle_deg = angleGridDeg(iPeak);
 result.spectrum = spectrum;
+result.method = 'SPATIAL_FFT';
 end

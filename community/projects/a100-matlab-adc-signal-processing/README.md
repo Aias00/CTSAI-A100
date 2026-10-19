@@ -80,3 +80,12 @@ run_configuration_tests;
 
 - 作者/团队：DuHongZhou/Beijing Institute of Technology
 - GitHub：@DwHz
+
+## Angle FFT 的阵列适用范围
+
+空间 FFT 只用于真实坐标落在配置网格上的阵列。对随附 Pf0 等非均匀坐标，
+算法改为使用真实阵元坐标的波束扫描，避免坐标取整引入错误角度。
+为兼容旧表格保留 AngleFFT_deg 列；新增 AngleFFTMethod 明确记录
+SPATIAL_FFT 或 GEOMETRY_SCAN，诊断结构也记录实际方法。
+该回退不解决低信噪比、相位标定、多径或跨通道同步问题。
+测试：`addpath('tests'); run_array_geometry_tests;`。
