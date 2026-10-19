@@ -2,6 +2,18 @@ function [detections, diagnostics] = estimate_angles_for_detections( ...
     rdCube, detections, cfg, angleOpts)
 %ESTIMATE_ANGLES_FOR_DETECTIONS Run four DOA methods for every detection.
 diagnostics = [];
+syncVerified = isfield(cfg,'capture_sync') && ...
+    isstruct(cfg.capture_sync) && isscalar(cfg.capture_sync) && ...
+    isfield(cfg.capture_sync,'verified') && isequal(cfg.capture_sync.verified,true);
+detections.CaptureSyncVerified = repmat(syncVerified,height(detections),1);
+if ~syncVerified
+    detections.AngleFFT_deg = nan(height(detections),1);
+    detections.DML_deg = nan(height(detections),1);
+    detections.MUSIC_deg = nan(height(detections),1);
+    detections.OMP_deg = nan(height(detections),1);
+    detections.SelectedAngle_deg = nan(height(detections),1);
+    return;
+end
 if isempty(detections)
     detections.AngleFFT_deg = zeros(0,1);
     detections.DML_deg = zeros(0,1);

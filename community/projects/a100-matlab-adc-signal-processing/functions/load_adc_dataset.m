@@ -1,5 +1,6 @@
-function [adcCube, metadata] = load_adc_dataset(files, cfg, ioOpts)
+function [adcCube, metadata, captureSync] = load_adc_dataset(files, cfg, ioOpts)
 %LOAD_ADC_DATASET Load four RX files into [sample, chirp, RX].
+captureSync = validate_capture_sync(files, ioOpts);
 numFiles = numel(files);
 if numFiles < cfg.num_rx
     error('Expected %d RX files, found %d.', cfg.num_rx, numFiles);

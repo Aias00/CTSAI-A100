@@ -14,7 +14,13 @@ end
 x = rangeValue .* sind(angle);
 y = rangeValue .* cosd(angle);
 fig = figure('Name','Target Point Cloud','Visible',figureOpts.visible);
-scatter3(x, y, velocityValue, 55, detections.SNR_dB, 'filled');
+valid = isfinite(x) & isfinite(y) & isfinite(velocityValue);
+if any(valid)
+    scatter3(x(valid), y(valid), velocityValue(valid), 55, detections.SNR_dB(valid), 'filled');
+else
+    text(0.5,0.5,'No verified spatial positions available', ...
+        'Units','normalized','HorizontalAlignment','center');
+end
 grid on; xlabel('Lateral x (m)'); ylabel('Forward y (m)');
 zlabel('Radial velocity (m/s)'); title('Detected target point cloud');
 colorbar;

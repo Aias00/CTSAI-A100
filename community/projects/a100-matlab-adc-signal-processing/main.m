@@ -31,7 +31,12 @@ print_profile_summary(radarCfg);
 %% 2. Discover and parse ADC files
 profileTag = sprintf('Pf%d', opts.profile_id);
 dataFiles = discover_adc_files(fullfile(projectRoot, 'data'), profileTag);
-[adcRxCube, adcMeta] = load_adc_dataset(dataFiles, radarCfg, opts.io);
+[adcRxCube, adcMeta, captureSync] = load_adc_dataset(dataFiles, radarCfg, opts.io);
+radarCfg.capture_sync = captureSync;
+if ~captureSync.verified
+    warning('CTSAI:CaptureSyncUnverified', ...
+        'RX synchronization is unverified; angle estimates and spatial point cloud are unavailable.');
+end
 fprintf('Raw ADC cube: samples=%d, raw chirps=%d, RX=%d\n', ...
     size(adcRxCube, 1), size(adcRxCube, 2), size(adcRxCube, 3));
 

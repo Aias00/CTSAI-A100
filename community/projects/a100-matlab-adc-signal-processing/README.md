@@ -80,3 +80,9 @@ run_configuration_tests;
 
 - 作者/团队：DuHongZhou/Beijing Institute of Technology
 - GitHub：@DwHz
+
+## 相干测角前提
+
+默认不假定四路 RX 同步；缺少采集证据时角度输出 NaN，距离/速度结果继续导出。
+同步声明和文件绑定方式见 [CAPTURE_SYNC.md](docs/CAPTURE_SYNC.md)。
+历史结果文件未因本 PR 重建，不应当作通过同步验证的测角结果。

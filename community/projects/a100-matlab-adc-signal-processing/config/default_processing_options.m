@@ -3,6 +3,7 @@ function opts = default_processing_options()
 
 opts.profile_id = 0; % Example TXT files are profile 0 (Pf0).
 
+opts.io.capture_sync = struct('verified', false); % See docs/CAPTURE_SYNC.md.
 opts.io.strict_header = true;
 opts.io.allow_zero_pad = false;
 opts.io.tx_chirp_layout = 'block'; % Chirp-group layout: 'block' or 'interleaved'.
