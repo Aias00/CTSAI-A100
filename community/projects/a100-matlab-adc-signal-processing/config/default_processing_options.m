@@ -19,7 +19,7 @@ opts.range_fft.normalize = 'coherent_gain';
 % SVD is the competition-oriented default; set to MEAN for a fast baseline.
 opts.clutter.method = 'SVD';
 opts.clutter.svd_rank = 1;
-opts.clutter.svd_energy_fraction = []; % Empty uses svd_rank.
+opts.clutter.svd_energy_fraction = []; % Empty: svd_rank; [0,1]: energy; 0: remove none.
 opts.clutter.svd_max_rank = 3;
 opts.clutter.svd_center_rows = false;
 opts.clutter.normalize_output_power = false;

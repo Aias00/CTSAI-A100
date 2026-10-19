@@ -113,14 +113,23 @@ end
 removedRank = 0;
 if isfield(clutterOpts, 'svd_energy_fraction') && ...
         ~isempty(clutterOpts.svd_energy_fraction)
-    targetFraction = min(max(clutterOpts.svd_energy_fraction, 0), 1);
-    cumulativeEnergy = cumsum(abs(singularValues).^2) / ...
-        max(sum(abs(singularValues).^2), eps);
-    rankCandidate = find(cumulativeEnergy >= targetFraction, 1, 'first');
-    if isempty(rankCandidate)
-        rankCandidate = maxRank;
+    targetFraction = clutterOpts.svd_energy_fraction;
+    if ~isnumeric(targetFraction) || ~isreal(targetFraction) || ...
+            ~isscalar(targetFraction) || ~isfinite(targetFraction) || ...
+            targetFraction < 0 || targetFraction > 1
+        error('CTSAI:InvalidSvdEnergyFraction', ...
+            'svd_energy_fraction must be a finite real scalar in [0,1], or empty.');
     end
-    removedRank = min(rankCandidate, maxRank);
+    totalEnergy = sum(abs(singularValues).^2);
+    % Zero requested energy (or a zero input) requires no removed components.
+    if targetFraction > 0 && totalEnergy > 0
+        cumulativeEnergy = cumsum(abs(singularValues).^2) / totalEnergy;
+        rankCandidate = find(cumulativeEnergy >= targetFraction, 1, 'first');
+        if isempty(rankCandidate)
+            rankCandidate = maxRank;
+        end
+        removedRank = min(rankCandidate, maxRank);
+    end
 elseif isfield(clutterOpts, 'svd_rank')
     removedRank = min(max(0, round(clutterOpts.svd_rank)), maxRank);
 end
