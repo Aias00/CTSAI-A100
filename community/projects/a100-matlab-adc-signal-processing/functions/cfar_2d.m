@@ -8,6 +8,12 @@ halfR = trainR + guardR;
 halfD = trainD + guardD;
 algorithm = upper(strtrim(cfarOpts.algorithm));
 
+% Supply a complete periodic Doppler neighborhood to every CFAR variant.
+% Distance remains bounded and is excluded by the existing range margin.
+numDoppler = size(powerMap,2);
+columns = mod(-halfD:numDoppler+halfD-1,numDoppler) + 1;
+powerMap = powerMap(:,columns);
+
 switch algorithm
     case 'CA'
         [kernel, ~, ~] = build_cfar_kernels(trainR, trainD, guardR, guardD);
@@ -83,11 +89,24 @@ result.snr_db = 10 * log10((powerMap + eps) ./ (noiseMap + eps));
 result.alpha = alpha;
 result.alpha_map = alphaMap;
 result.num_training_cells = numTrainingMap;
-result.edge_margin = [halfR, halfD];
+result.edge_margin = [halfR, 0];
 result.method_map = methodMap;
 result.method_names = methodNames;
 result.variability_index = variabilityIndex;
 result.sector_mean_ratio = sectorMeanRatio;
+
+% Return the original grid for every diagnostic, including matrix alpha.
+columns = halfD + (1:numDoppler);
+mapFields = {'mask','power','noise','threshold','snr_db','alpha_map', ...
+    'num_training_cells','method_map','variability_index','sector_mean_ratio'};
+for iField = 1:numel(mapFields)
+    name = mapFields{iField};
+    values = result.(name);
+    result.(name) = values(:,columns);
+end
+if ~isscalar(result.alpha)
+    result.alpha = result.alpha(:,columns);
+end
 end
 
 function variabilityIndex = local_variability_index(powerMap, kernel, numTraining)
