@@ -4,6 +4,13 @@ if isempty(diagnostics)
     return;
 end
 fig = figure('Name','Angle Estimation','Visible',figureOpts.visible);
+if isfield(diagnostics,'status') && strcmp(diagnostics.status,'capture_sync_unverified')
+    text(0.5,0.5,'Angle unavailable: capture synchronization unverified', ...
+        'Units','normalized','HorizontalAlignment','center');
+    axis off;
+    save_result_figure(fig, fullfile(resultsDir,'angle_spectra.png'), figureOpts);
+    return;
+end
 angleGrid = diagnostics.angle_grid_deg;
 plot(angleGrid, normalize_spectrum_db(diagnostics.angle_fft_spectrum), ...
     'LineWidth',1.1); hold on;

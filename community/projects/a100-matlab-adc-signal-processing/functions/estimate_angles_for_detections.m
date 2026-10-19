@@ -7,6 +7,7 @@ syncVerified = isfield(cfg,'capture_sync') && ...
     isfield(cfg.capture_sync,'verified') && isequal(cfg.capture_sync.verified,true);
 detections.CaptureSyncVerified = repmat(syncVerified,height(detections),1);
 if ~syncVerified
+    diagnostics = struct('status','capture_sync_unverified');
     detections.AngleFFT_deg = nan(height(detections),1);
     detections.DML_deg = nan(height(detections),1);
     detections.MUSIC_deg = nan(height(detections),1);
