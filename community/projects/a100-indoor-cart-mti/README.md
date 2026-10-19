@@ -190,3 +190,13 @@ MTI 前后二维图共用 MTI 前峰值作为 0 dB 参考，因此图中的目�
 
 - GitHub：[@yyqdbngt](https://github.com/yyqdbngt)
 - 项目：Super-Radar/CTSAI-A100 Community Project
+
+## 目标数量扫描的噪声口径
+
+`noise_rms=[]`（或省略）保留按全场景 SNR 缩放噪声的原行为；设置有限非负标量
+则固定复噪声 RMS。目标数量扫描现在按首个运动目标幅度和配置 SNR 确定一次噪声底，
+避免添加强静态目标时同时提高噪声。CSV 新增 noise_rms 与 reference_target_snr_db，
+场景及评估结构还记录 noise_mode。其他参数扫描保留原噪声模式。
+
+已提交旧图/CSV 尚未重新生成，不应视为固定噪声实验的结果。重建：
+`run_parameter_studies(project_root)`；回归：`addpath('tests'); test_fixed_noise;`。

@@ -56,6 +56,8 @@ target_counts = [1, 2, 4];
 count_eval = cell(size(target_counts));
 for idx = 1:numel(target_counts)
     cfg = base; cfg.targets = base.targets(1:target_counts(idx));
+    % Reference motion target amplitude fixes the noise floor across counts.
+    cfg.noise_rms = abs(base.targets(1).amplitude) / 10^(base.noise_snr_db/20);
     count_eval{idx} = evaluate_simulation_case(cfg, 1);
     rows(end + 1, :) = make_row('target_count', target_counts(idx), 'count', count_eval{idx}); %#ok<AGROW>
 end
@@ -78,7 +80,8 @@ row = {parameter, value, unit, evaluation.range_resolution_m, ...
        evaluation.max_unambiguous_range_m, evaluation.cart_beat_frequency_hz, ...
        evaluation.detected_range_m, evaluation.detected_velocity_mps, ...
        evaluation.moving_retention_db, evaluation.static_suppression_db, ...
-       evaluation.target_count, evaluation.mti_order};
+       evaluation.target_count, evaluation.mti_order, ...
+       evaluation.noise_rms, evaluation.reference_target_snr_db};
 end
 
 function write_summary(file_path, rows)
@@ -90,10 +93,10 @@ cleanup = onCleanup(@() fclose(fid));
 fprintf(fid, ['parameter,value,value_unit,range_resolution_m,velocity_resolution_mps,' ...
               'max_unambiguous_velocity_mps,max_unambiguous_range_m,cart_beat_frequency_hz,' ...
               'detected_range_m,detected_velocity_mps,moving_retention_db,' ...
-              'static_suppression_db,target_count,mti_order\n']);
+              'static_suppression_db,target_count,mti_order,noise_rms,reference_target_snr_db\n']);
 for idx = 1:size(rows, 1)
     fprintf(fid, '%s,%.12g,%s', rows{idx, 1}, rows{idx, 2}, rows{idx, 3});
-    for column = 4:14
+    for column = 4:16
         fprintf(fid, ',%.12g', rows{idx, column});
     end
     fprintf(fid, '\n');

@@ -10,6 +10,7 @@ cfg.num_samples = 1024;
 cfg.num_chirps = 256;
 cfg.sample_rate_hz = cfg.num_samples / cfg.chirp_duration_s;
 cfg.noise_snr_db = 24;
+cfg.noise_rms = []; % Empty: scene SNR; non-negative scalar: fixed noise floor.
 cfg.mti_order = 1;
 cfg.random_seed = 20260802;
 cfg.generate_reference_waveforms = true;
