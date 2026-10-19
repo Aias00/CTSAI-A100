@@ -117,9 +117,19 @@ class RadarParser:
         numeric_cols = ['ObjId', 'range', 'speed', 'angle', 'RCS', 'snr', 'X', 'Y']
         for col in numeric_cols:
             if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        df = df.dropna(subset=['ObjId']).reset_index(drop=True)
-        df = df[df['range'] >= 0].reset_index(drop=True)
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        # Validate identities and measurements before filling optional fields.
+        required = ['ObjId', 'range']
+        required += [c for c in ('speed', 'angle') if c in df.columns]
+        if 'angle' not in df.columns:
+            required += [c for c in ('X', 'Y') if c in df.columns]
+        valid = np.isfinite(df[required]).all(axis=1)
+        valid &= (df['ObjId'] >= 0) & (df['ObjId'] == np.floor(df['ObjId']))
+        valid &= df['range'] >= 0
+        df = df.loc[valid].reset_index(drop=True)
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = df[col].fillna(0)
 
         if 'angle' in df.columns and 'range' in df.columns:
             df['angle_rad'] = np.deg2rad(df['angle'])
