@@ -1,43 +1,49 @@
-function [adcData] = load_adc_data(file, Cfg)
-%------------------------------------------------------------------------------
-%   load_1rx_adc_data.m
-%------------------------------------------------------------------------------
-%   Author       : ZhuXinpeng
-%   Created      : 2021-05-13
-%   Description  : Load all adc data (Fixed Length Mismatch)
-%------------------------------------------------------------------------------
+function adcData = load_adc_data(file, Cfg)
+%LOAD_ADC_DATA Read headered Pf/Rx exports or legacy headerless captures.
+% Original author: ZhuXinpeng (2021-05-13).
+% A header is [RX index, samples per chirp, chirp count]. Only verified
+% zero padding may follow the payload; damaged captures are never padded.
 
 nfiles = numel(file);
-
+if nfiles ~= Cfg.nvirtual_array / Cfg.nvirtual_chirp
+    error('CTSAI:ChannelCount', 'ADC file count does not match configuration.');
+end
+target_dim = [Cfg.rng_nfft/2, Cfg.nchirp];
+expected_len = prod(target_dim);
+adcTemp2 = zeros(Cfg.nchirp, Cfg.rng_nfft/2, nfiles);
 for ifile = 1:nfiles
-    % 1. 读取数据并展平为列向量
-    adcTempCol = csvread(file{ifile});
-    adcTempCol = adcTempCol(:);
-    actual_len = length(adcTempCol);
-    
-    % 2. 关键修复：统一预期长度和reshape目标
-    target_dim = [Cfg.rng_nfft/2, Cfg.nchirp];
-    expected_len = prod(target_dim);  % 直接用reshape需要的长度g'fgf
-    
-    % 打印调试信息
-    fprintf('通道 %d:\n', ifile);
-    fprintf('  实际数据长度: %d\n', actual_len);
-    fprintf('  reshape目标维度: %d × %d (需要元素数: %d)\n', ...
-        target_dim(1), target_dim(2), expected_len);
-    
-    % 3. 强制对齐到reshape需要的长度
-    if actual_len > expected_len
-        warning('通道 %d 数据过长，自动截断到 %d 个样本', ifile, expected_len);
-        adcTempCol = adcTempCol(1:expected_len);
-    elseif actual_len < expected_len
-        warning('通道 %d 数据过短，自动补零到 %d 个样本', ifile, expected_len);
-        adcTempCol = [adcTempCol; zeros(expected_len - actual_len, 1)];
+    tokens = regexp(strtrim(fileread(file{ifile})), ',', 'split');
+    if isempty(strtrim(tokens{end}))
+        tokens(end) = []; % A single trailing CSV delimiter is allowed.
     end
-    
-    % 4. 现在元素数100%匹配，直接reshape
-    adcTemp(:, ifile) = adcTempCol;
-    adcTemp1(:, :, ifile) = reshape(adcTempCol, target_dim);
-    adcTemp2(:, :, ifile) = adcTemp1(:, :, ifile)';
+    values = str2double(tokens(:));
+    if any(~isfinite(values))
+        error('CTSAI:InvalidToken', 'Non-finite or invalid ADC token in %s.', file{ifile});
+    end
+    % Pf/Rx filenames explicitly identify the newer three-field format.
+    % Older captures have exactly the payload plus optional one zero pad.
+    hasHeader = ~isempty(regexp(file{ifile}, '_Pf[0-9]+_Rx[0-9]+', 'once')) || ...
+        numel(values) >= expected_len + 3;
+    if hasHeader
+        if numel(values) < 3 || ...
+                ~isequal(values(1:3).', [ifile-1, Cfg.rng_nfft, Cfg.nchirp])
+            error('CTSAI:HeaderMismatch', 'ADC channel/dimensions do not match %s.', file{ifile});
+        end
+        payload = values(4:end);
+    else
+        payload = values;
+    end
+    if numel(payload) < expected_len
+        error('CTSAI:TruncatedCapture', 'ADC payload is short in %s.', file{ifile});
+    end
+    if any(payload(expected_len+1:end) ~= 0)
+        error('CTSAI:ExcessData', 'Non-zero data follows the ADC payload in %s.', file{ifile});
+    end
+    words = payload(1:expected_len);
+    if any(words < 0 | words > 4294967295 | words ~= floor(words))
+        error('CTSAI:InvalidWord', 'ADC words must be uint32 integers in %s.', file{ifile});
+    end
+    adcTemp2(:,:,ifile) = reshape(words, target_dim).';
 end
 
 if Cfg.nvirtual_chirp == 1
