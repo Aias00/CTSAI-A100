@@ -1,0 +1,15 @@
+name: CFAR Pfa diagnostics
+on:
+  push:
+    branches: [fix/cfar-nominal-pfa]
+  pull_request:
+    paths:
+      - 'community/projects/a100-matlab-adc-signal-processing/**'
+      - '.github/workflows/cfar-pfa-diagnostics.yml'
+jobs:
+  octave:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends octave
+      - run: octave --no-gui --quiet --eval "addpath('community/projects/a100-matlab-adc-signal-processing/tests'); run_cfar_pfa_diagnostics;"

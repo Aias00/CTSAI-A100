@@ -73,6 +73,8 @@ fprintf(['Clutter suppression: %s, removed rank=%d, total power change=%.2f dB, 
 
 %% 5. Adaptive CFAR detection and peak extraction
 cfarResult = cfar_2d(rdPower, opts.cfar);
+fprintf('CFAR nominal Pfa: %.3g (not empirically calibrated for this processing chain)\n', ...
+    cfarResult.nominal_pfa);
 detections = extract_detections(cfarResult, radarCfg, opts.detection);
 
 %% 6. Sub-bin range and velocity refinement

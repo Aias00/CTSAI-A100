@@ -36,6 +36,9 @@ opts.doppler_fft.normalize = 'coherent_gain';
 opts.cfar.algorithm = 'VI';
 opts.cfar.training_cells = [3, 6]; % [range, Doppler] per side.
 opts.cfar.guard_cells = [1, 2];
+% Nominal single-look reference parameter, NOT a calibrated output Pfa.
+% Multi-RX averaging, Hann correlation and adaptive sector selection change
+% the statistics. See docs/CFAR_PFA_LIMITATIONS.md before interpreting it.
 opts.cfar.pfa = 1e-4;
 opts.cfar.os_rank_ratio = 0.75;
 opts.cfar.vi_threshold = 2.5;          % Local variance / mean^2 threshold.

@@ -80,3 +80,10 @@ run_configuration_tests;
 
 - 作者/团队：DuHongZhou/Beijing Institute of Technology
 - GitHub：@DwHz
+
+## CFAR 虚警率解释
+
+`opts.cfar.pfa` 是名义参考参数，当前输出包含 `nominal_pfa` 和
+`pfa_calibrated=false`；实际虚警率未经完整链路校准。
+多 RX 功率平均、窗相关性及 GOCA/SOCA/VI 的数据选择都会改变统计分布。
+可运行诊断与标定范围见 [CFAR_PFA_LIMITATIONS.md](docs/CFAR_PFA_LIMITATIONS.md)。

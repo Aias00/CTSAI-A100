@@ -74,6 +74,11 @@ valid(halfR+1:end-halfR, halfD+1:end-halfD) = true;
 mask = mask & valid;
 methodMap(~valid) = 0;
 
+% A nominal tuning input, not a measured false-alarm guarantee. Even CA's
+% exponential IID model does not describe averaged multi-RX power exactly.
+result.nominal_pfa = cfarOpts.pfa;
+result.pfa_calibrated = false;
+result.pfa_model = 'IID exponential CA/OS reference; GOCA/SOCA/VI use CA approximation';
 result.algorithm = algorithm;
 result.mask = mask;
 result.power = powerMap;
