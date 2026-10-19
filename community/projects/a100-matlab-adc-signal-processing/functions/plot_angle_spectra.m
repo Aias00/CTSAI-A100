@@ -16,7 +16,11 @@ plot(angleGrid, normalize_spectrum_db(diagnostics.omp_spectrum), ...
 grid on; xlabel('Azimuth angle (deg)'); ylabel('Normalized spectrum (dB)');
 title(sprintf('DOA spectra at R=%.2f m, v=%.2f m/s', ...
     diagnostics.range_m, diagnostics.velocity_mps));
-legend('Angle FFT','DML','MUSIC','OMP','Location','best');
+spatialLabel = 'Angle FFT';
+if isfield(diagnostics,'angle_fft_method') && strcmp(diagnostics.angle_fft_method,'GEOMETRY_SCAN')
+    spatialLabel = 'Geometry beam scan';
+end
+legend(spatialLabel,'DML','MUSIC','OMP','Location','best');
 ylim([-40, 1]);
 save_result_figure(fig, fullfile(resultsDir,'angle_spectra.png'), figureOpts);
 end
