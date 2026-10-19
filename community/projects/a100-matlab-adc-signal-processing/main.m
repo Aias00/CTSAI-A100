@@ -25,7 +25,7 @@ fprintf('CFAR algorithm: %s\n', opts.cfar.algorithm);
 configPath = fullfile(projectRoot, 'config', ...
     sprintf('sensor_config_init%d.hxx', opts.profile_id));
 radarCfg = load_ctsaia100_config(configPath);
-radarCfg = derive_radar_parameters(radarCfg);
+radarCfg = derive_radar_parameters(radarCfg, opts.io.tx_chirp_layout);
 print_profile_summary(radarCfg);
 
 %% 2. Discover and parse ADC files

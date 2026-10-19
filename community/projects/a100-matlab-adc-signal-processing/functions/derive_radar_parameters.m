@@ -1,5 +1,14 @@
-function cfg = derive_radar_parameters(cfg)
+function cfg = derive_radar_parameters(cfg, layout)
 %DERIVE_RADAR_PARAMETERS Add physical axes, MIMO mode and channel geometry.
+if nargin < 2 || isempty(layout)
+    layout = 'block';
+end
+layout = lower(strtrim(layout));
+if ~ismember(layout, {'block', 'interleaved'})
+    error('CTSAI:InvalidLayout', 'Unknown TX chirp layout: %s', layout);
+end
+cfg.tx_chirp_layout = layout;
+
 required = {'fmcw_startfreq','fmcw_bandwidth','fmcw_chirp_rampup', ...
     'fmcw_chirp_period','nchirp','adc_freq','dec_factor', ...
     'adc_sample_start','adc_sample_end','rng_nfft','vel_nfft','tx_groups'};
@@ -56,8 +65,12 @@ if abs(cfg.slow_time_chirp_num - round(cfg.slow_time_chirp_num)) > ...
     error('nchirp must be divisible by the active TX chirp-group count.');
 end
 cfg.slow_time_chirp_num = round(cfg.slow_time_chirp_num);
-cfg.same_tx_chirp_period_s = cfg.fmcw_chirp_period * 1e-6 * ...
-    cfg.mimo.group_count;
+% Block groups contain consecutive chirps; interleaved groups are strided.
+samplingStride = 1;
+if strcmp(layout, 'interleaved')
+    samplingStride = cfg.mimo.group_count;
+end
+cfg.same_tx_chirp_period_s = cfg.fmcw_chirp_period * 1e-6 * samplingStride;
 cfg.velocity_resolution_mps = cfg.lambda_m / ...
     (2 * cfg.same_tx_chirp_period_s * cfg.vel_nfft);
 if mod(cfg.vel_nfft, 2) == 0

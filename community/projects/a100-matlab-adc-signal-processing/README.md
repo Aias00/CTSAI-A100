@@ -80,3 +80,12 @@ run_configuration_tests;
 
 - 作者/团队：DuHongZhou/Beijing Institute of Technology
 - GitHub：@DwHz
+
+## TDM 采样布局与速度轴
+
+`derive_radar_parameters(cfg, layout)` 和 `organize_virtual_array` 必须使用同一个
+`block` / `interleaved` 布局；主入口从 `opts.io.tx_chirp_layout` 统一传入。
+连续 block 组内同 TX 间隔为一个 chirp 周期，交错布局为组数乘以 chirp 周期。
+省略布局时默认 block。多 TX 在不同时刻采样，本修复只校正速度轴，
+不补偿运动目标的跨 TX 相位；不能据此声称 TDM 角度已校准。
+测试：`addpath('tests'); run_tdm_velocity_tests; run_configuration_tests;`。

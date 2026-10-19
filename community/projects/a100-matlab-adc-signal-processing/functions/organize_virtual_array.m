@@ -11,7 +11,11 @@ function virtualCube = organize_virtual_array(rangeRxCube, cfg, layout)
 % silently treated as TDM.
 
 if nargin < 3 || isempty(layout)
-    layout = 'block';
+    layout = cfg.tx_chirp_layout;
+end
+if ~strcmpi(strtrim(layout), cfg.tx_chirp_layout)
+    error('CTSAI:LayoutMismatch', ...
+        'Derive parameters and organize chirps using the same TX layout.');
 end
 if size(rangeRxCube, 3) ~= cfg.num_rx
     error('Expected %d RX channels, got %d.', cfg.num_rx, size(rangeRxCube,3));

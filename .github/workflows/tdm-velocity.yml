@@ -1,0 +1,15 @@
+name: TDM velocity regression
+on:
+  push:
+    branches: [fix/tdm-layout-velocity]
+  pull_request:
+    paths:
+      - 'community/projects/a100-matlab-adc-signal-processing/**'
+      - '.github/workflows/tdm-velocity.yml'
+jobs:
+  octave:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends octave
+      - run: octave --no-gui --quiet --eval "addpath('community/projects/a100-matlab-adc-signal-processing/tests'); run_tdm_velocity_tests; run_configuration_tests;"
