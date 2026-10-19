@@ -1,0 +1,20 @@
+name: Gated assignment regression
+on:
+  push:
+    branches: [fix/viewer-gated-assignment]
+  pull_request:
+    paths:
+      - 'Python雷达可视化工具示例/**'
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install numpy scipy pandas matplotlib
+      - run: python -m unittest discover -s Python雷达可视化工具示例/tests -p test_gated_assignment.py -v
+        env:
+          MPLBACKEND: Agg
+          PYTHONDONTWRITEBYTECODE: '1'

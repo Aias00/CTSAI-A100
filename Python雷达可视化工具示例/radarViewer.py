@@ -226,8 +226,19 @@ class KalmanTracker:
             predicted_points = np.array([self.tracked_targets[tid]['x'][:2] for tid in track_ids])
             # 计算距离矩阵
             dist_matrix = np.sqrt(((current_points[:, None] - predicted_points[None, :]) ** 2).sum(axis=2))
-            # 匈牙利匹配
-            row_ind, col_ind = linear_sum_assignment(dist_matrix)
+            # Gate before assignment. Dummy columns allow every observation
+            # to remain unmatched; their penalty first maximizes valid matches.
+            limit = self.match_thresh.get()
+            valid = dist_matrix < limit
+            scale = max(float(dist_matrix[valid].max()), 1.0) if valid.any() else 1.0
+            unmatched_cost = len(current_points) + 1.0
+            costs = np.full((len(current_points), len(track_ids) + len(current_points)),
+                            unmatched_cost)
+            costs[:, :len(track_ids)] = np.where(valid, dist_matrix / scale,
+                                                2 * unmatched_cost)
+            rows, columns = linear_sum_assignment(costs)
+            real = columns < len(track_ids)
+            row_ind, col_ind = rows[real], columns[real]
             # 匹配结果处理
             matched_tracks = set()
             for r, c in zip(row_ind, col_ind):
