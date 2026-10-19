@@ -4,7 +4,7 @@ if nargin < 2 || isempty(layout)
     layout = 'block';
 end
 layout = lower(strtrim(layout));
-if ~ismember(layout, {'block', 'interleaved'})
+if ~any(strcmp(layout, {'block', 'interleaved'}))
     error('CTSAI:InvalidLayout', 'Unknown TX chirp layout: %s', layout);
 end
 cfg.tx_chirp_layout = layout;
