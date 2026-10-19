@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 import re
+import warnings
 from datetime import datetime
 import os
 from collections import deque, defaultdict
@@ -42,6 +43,8 @@ class RadarParser:
             raise ValueError("未找到有效数据表头，文件格式不支持")
 
         current_frame = None
+        device_frame = None
+        next_sequence = 0
         current_timestamp = None
         frame_start = None
         data_count = 0
@@ -50,13 +53,16 @@ class RadarParser:
             if line.startswith('START,'):
                 if current_frame is not None and frame_start is not None:
                     self.frame_index[current_frame] = {
+                        'frame_number': device_frame,
                         'start': frame_start,
                         'end': line_idx - 1,
                         'ts': current_timestamp,
                         'count': data_count
                     }
                 m = re.search(r'FrameNb:(\d+)', line)
-                current_frame = int(m.group(1)) if m else len(self.frame_index)
+                device_frame = int(m.group(1)) if m else None
+                current_frame = next_sequence
+                next_sequence += 1
                 current_timestamp = None
                 frame_start = line_idx + 1
                 data_count = 0
@@ -71,11 +77,29 @@ class RadarParser:
             elif line.startswith('END,'):
                 if current_frame is not None and frame_start is not None:
                     self.frame_index[current_frame] = {
+                        'frame_number': device_frame,
                         'start': frame_start,
                         'end': line_idx - 1,
                         'ts': current_timestamp,
                         'count': data_count
                     }
+                current_frame = None
+                frame_start = None
+
+        for info in self.frame_index.values():
+            info['incomplete'] = False
+        if current_frame is not None and frame_start is not None:
+            device_match = re.search(r'FrameNb:(\d+)', self.all_lines[frame_start - 1])
+            self.frame_index[current_frame] = {
+                'frame_number': int(device_match.group(1)) if device_match else None,
+                'start': frame_start,
+                'end': len(self.all_lines) - 1,
+                'ts': current_timestamp,
+                'count': data_count,
+                'incomplete': True
+            }
+            warnings.warn('Retaining incomplete final radar frame (missing END marker).',
+                          RuntimeWarning, stacklevel=2)
 
         if not self.frame_index:
             df = pd.read_csv(self.file_path, on_bad_lines='skip')
@@ -111,15 +135,26 @@ class RadarParser:
                         parts = parts[:header_len]
                     rows.append(parts)
             df = pd.DataFrame(rows, columns=self.header_line)
-            df['FrameNb'] = fnb
+            device_number = info['frame_number']
+            df['FrameNb'] = fnb if device_number is None else device_number
             df['Timestamp'] = info['ts']
 
         numeric_cols = ['ObjId', 'range', 'speed', 'angle', 'RCS', 'snr', 'X', 'Y']
         for col in numeric_cols:
             if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        df = df.dropna(subset=['ObjId']).reset_index(drop=True)
-        df = df[df['range'] >= 0].reset_index(drop=True)
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        # Validate identities and measurements before filling optional fields.
+        required = ['ObjId', 'range']
+        required += [c for c in ('speed', 'angle') if c in df.columns]
+        if 'angle' not in df.columns:
+            required += [c for c in ('X', 'Y') if c in df.columns]
+        valid = np.isfinite(df[required]).all(axis=1)
+        valid &= (df['ObjId'] >= 0) & (df['ObjId'] == np.floor(df['ObjId']))
+        valid &= df['range'] >= 0
+        df = df.loc[valid].reset_index(drop=True)
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = df[col].fillna(0)
 
         if 'angle' in df.columns and 'range' in df.columns:
             df['angle_rad'] = np.deg2rad(df['angle'])
@@ -176,7 +211,10 @@ class KalmanTracker:
         self.max_lost_frames = IntVar(value=3)    # 最大丢失帧数
         self.next_id = 0
         self.tracked_targets = {}  # {track_id: {'state': 卡尔曼状态, 'lost_frames': 丢失帧数, 'history': 历史坐标}}
-        self.dt = 0.1  # 帧间隔时间
+        self.dt = 0.1  # Fallback only when capture timestamps are unavailable.
+        self.measurement_timestamp = None
+        self._previous_timestamp = None
+        self.acceleration_variance = 4.0
 
     def _init_kalman(self, x, y, vx=0, vy=0):
         # 匀速运动模型：状态向量 [x, y, vx, vy]
@@ -188,11 +226,44 @@ class KalmanTracker:
                       [0, 1, 0, 0]])  # 观测矩阵
         P = np.eye(4) * 1000  # 初始协方差矩阵
         R = np.eye(2) * 0.1  # 观测噪声协方差
-        Q = np.eye(4) * 0.01  # 过程噪声协方差
+        Q = self._process_noise()
         x0 = np.array([x, y, vx, vy])  # 初始状态
         return {'F': F, 'H': H, 'P': P, 'R': R, 'Q': Q, 'x': x0}
 
+    def _process_noise(self):
+        # Independent white acceleration per axis over the capture interval.
+        dt = self.dt
+        G = np.array([[dt*dt/2, 0], [0, dt*dt/2], [dt, 0], [0, dt]])
+        return self.acceleration_variance * (G @ G.T)
+
+    def _update_capture_interval(self):
+        timestamp = self.measurement_timestamp
+        if isinstance(timestamp, str):
+            try:
+                timestamp = datetime.fromisoformat(timestamp)
+            except ValueError:
+                timestamp = None
+        if not isinstance(timestamp, datetime) or pd.isna(timestamp):
+            timestamp = None
+        previous = self._previous_timestamp
+        self.dt = 0.1
+        if previous is not None and timestamp is not None:
+            try:
+                delta = (timestamp - previous).total_seconds()
+            except TypeError:  # Mixed timezone-aware and naive timestamps.
+                self.tracked_targets = {}
+            else:
+                if np.isfinite(delta) and delta > 0:
+                    self.dt = delta
+                else:
+                    # Clock reset/duplicate cannot advance a physical trajectory.
+                    self.tracked_targets = {}
+        self._previous_timestamp = timestamp
+
     def _predict(self, track):
+        track['F'][0, 2] = self.dt
+        track['F'][1, 3] = self.dt
+        track['Q'] = self._process_noise()
         # 卡尔曼预测
         track['x'] = track['F'] @ track['x']
         track['P'] = track['F'] @ track['P'] @ track['F'].T + track['Q']
@@ -208,12 +279,13 @@ class KalmanTracker:
         return track
 
     def track(self, df):
-        if not self.enable_tracking.get() or df.empty:
+        if not self.enable_tracking.get():
             df['track_id'] = df['ObjId'] if 'ObjId' in df.columns else range(len(df))
             return df
         
+        self._update_capture_interval()
         current_points = df[['X', 'Y']].values
-        current_ids = []
+        current_ids = [None] * len(current_points)
 
         # 1. 预测所有已跟踪目标的位置
         for track_id in list(self.tracked_targets.keys()):
@@ -226,26 +298,35 @@ class KalmanTracker:
             predicted_points = np.array([self.tracked_targets[tid]['x'][:2] for tid in track_ids])
             # 计算距离矩阵
             dist_matrix = np.sqrt(((current_points[:, None] - predicted_points[None, :]) ** 2).sum(axis=2))
-            # 匈牙利匹配
-            row_ind, col_ind = linear_sum_assignment(dist_matrix)
+            # Gate before assignment. Dummy columns allow every observation
+            # to remain unmatched; their penalty first maximizes valid matches.
+            limit = self.match_thresh.get()
+            valid = dist_matrix < limit
+            scale = max(float(dist_matrix[valid].max()), 1.0) if valid.any() else 1.0
+            unmatched_cost = len(current_points) + 1.0
+            costs = np.full((len(current_points), len(track_ids) + len(current_points)),
+                            unmatched_cost)
+            costs[:, :len(track_ids)] = np.where(valid, dist_matrix / scale,
+                                                2 * unmatched_cost)
+            rows, columns = linear_sum_assignment(costs)
+            real = columns < len(track_ids)
+            row_ind, col_ind = rows[real], columns[real]
             # 匹配结果处理
-            matched_tracks = set()
             for r, c in zip(row_ind, col_ind):
                 if dist_matrix[r, c] < self.match_thresh.get():
                     track_id = track_ids[c]
-                    current_ids.append(track_id)
+                    current_ids[r] = track_id
                     # 卡尔曼更新
                     self.tracked_targets[track_id] = self._update(self.tracked_targets[track_id], current_points[r])
                     self.tracked_targets[track_id]['lost_frames'] = 0
                     # 记录历史坐标（X/Y顺序不变，绘图时对调）
                     self.tracked_targets[track_id]['history'].append((current_points[r][0], current_points[r][1]))
-                    matched_tracks.add(track_id)
             # 未匹配的当前点，新建跟踪
             for r in range(len(current_points)):
-                if r not in row_ind or dist_matrix[r, col_ind[list(row_ind).index(r)]] >= self.match_thresh.get():
+                if current_ids[r] is None:
                     track_id = self.next_id
                     self.next_id += 1
-                    current_ids.append(track_id)
+                    current_ids[r] = track_id
                     x, y = current_points[r]
                     self.tracked_targets[track_id] = self._init_kalman(x, y)
                     self.tracked_targets[track_id]['lost_frames'] = 0
@@ -253,10 +334,10 @@ class KalmanTracker:
                     self.tracked_targets[track_id]['history'].append((x, y))
         else:
             # 无跟踪目标，全部新建
-            for x, y in current_points:
+            for r, (x, y) in enumerate(current_points):
                 track_id = self.next_id
                 self.next_id += 1
-                current_ids.append(track_id)
+                current_ids[r] = track_id
                 self.tracked_targets[track_id] = self._init_kalman(x, y)
                 self.tracked_targets[track_id]['lost_frames'] = 0
                 self.tracked_targets[track_id]['history'] = deque(maxlen=3000)
@@ -275,6 +356,8 @@ class KalmanTracker:
         """重置跟踪器状态"""
         self.next_id = 0
         self.tracked_targets = {}
+        self._previous_timestamp = None
+        self.dt = 0.1
 
 # ---------------------- 4. DBSCAN目标聚类器 ----------------------
 class RadarCluster:
@@ -373,6 +456,10 @@ class RadarPlayer(tk.Tk):
         self.current = 0
         self.playing = False
         self.timer = None
+        self._last_tracking_frame = None
+        self._last_tracking_input = None
+        self._last_tracking_result = None
+        self._last_tracking_options = None
 
         # 绘图对象
         self.fig = None
@@ -398,6 +485,7 @@ class RadarPlayer(tk.Tk):
         try:
             # 重置跟踪器和轨迹
             self.tracker.reset()
+            self._last_tracking_frame = None
             self.trajectory.reset()
             
             self.parser = RadarParser(path)
@@ -617,6 +705,7 @@ class RadarPlayer(tk.Tk):
 
     def _reset_tracker(self):
         self.tracker.reset()
+        self._last_tracking_frame = None
         self.update_frame()
 
     def _setup_cluster_tab(self, parent):
@@ -680,7 +769,7 @@ class RadarPlayer(tk.Tk):
         self.ax.set_xlabel('Y坐标 (m)', fontsize=10)
         self.ax.set_ylabel('X坐标 (m)', fontsize=10)
         self.ax.grid(True, alpha=0.3)
-        self.title_text = self.ax.set_title(f"帧号: {self.current}", fontsize=12)
+        self.title_text = self.ax.set_title(f"帧序号: {self.current}", fontsize=12)
         # 绘制雷达原点
         self.origin = self.ax.scatter(0, 0, c='red', s=150, marker='o', zorder=10)
         # 初始化空散点
@@ -690,6 +779,28 @@ class RadarPlayer(tk.Tk):
             self.cbar = self.fig.colorbar(self.scatter, ax=self.ax, label='目标距离 (m)')
         self.canvas.draw()
 
+    def _track_frame(self, df):
+        """Advance tracking once per data frame; repaint from a cached copy."""
+        options = (self.tracker.enable_tracking.get(),
+                   self.tracker.match_thresh.get(),
+                   self.tracker.max_lost_frames.get())
+        same_options = options == self._last_tracking_options
+        if (self.current == self._last_tracking_frame and same_options
+                and df.equals(self._last_tracking_input)):
+            return self._last_tracking_result.copy()
+
+        index = self.fns.index(self.current)
+        follows_previous = index > 0 and self.fns[index - 1] == self._last_tracking_frame
+        if not follows_previous or not same_options:
+            # Seeking or changing the input/model starts a new trajectory.
+            self.tracker.reset()
+        result = self.tracker.track(df.copy())
+        self._last_tracking_frame = self.current
+        self._last_tracking_input = df.copy()
+        self._last_tracking_result = result.copy()
+        self._last_tracking_options = options
+        return result
+
     def update_frame(self):
         if not self.parser or not self.fns:
             return
@@ -697,12 +808,13 @@ class RadarPlayer(tk.Tk):
         # 1. 获取原始帧数据
         df_raw = self.parser.get_frame(self.current)
         info = self.parser.frame_index[self.current]
+        self.tracker.measurement_timestamp = info['ts']
 
         # 2. 应用筛选
         df_filtered = self.filter.apply(df_raw)
 
         # 3. 应用目标跟踪
-        df_tracked = self.tracker.track(df_filtered)
+        df_tracked = self._track_frame(df_filtered)
 
         # 4. 应用聚类
         df_clustered = self.cluster.cluster(df_tracked)
@@ -743,6 +855,8 @@ class RadarPlayer(tk.Tk):
         # 恢复基础画布设置
         self.ax.set_xlim(-50, 60)
         self.ax.set_ylim(-10, 120)
+        self.ax.set_xlabel('Y坐标 (m)', fontsize=10)
+        self.ax.set_ylabel('X坐标 (m)', fontsize=10)
         self.ax.grid(True)
         self.ax.scatter(0, 0, c='red', s=180, zorder=10)  # 雷达中心点
 
@@ -797,11 +911,19 @@ class RadarPlayer(tk.Tk):
                 )
                 count += 1
 
+        # Each redraw creates a new mappable; keep the distance legend aligned.
+        if self.cbar is not None:
+            show_distance = not df.empty and not self.cluster.enable_clustering.get()
+            self.cbar.ax.set_visible(show_distance)
+            if show_distance:
+                self.cbar.update_normal(self.scatter)
+                self.cbar.set_label('目标距离 (m)')
+
         # ===================== 轨迹绘制 =====================
         self.trajectory.draw(self.ax)
 
         # 标题 & 刷新
-        self.ax.set_title(f"帧号: {self.current}")
+        self.ax.set_title(f"帧序号: {self.current} | 设备帧号: {info.get('frame_number', self.current)}")
         self.canvas.draw()
     # 播放控制方法
     def toggle(self):
