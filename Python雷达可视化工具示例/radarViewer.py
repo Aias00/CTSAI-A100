@@ -42,6 +42,8 @@ class RadarParser:
             raise ValueError("未找到有效数据表头，文件格式不支持")
 
         current_frame = None
+        device_frame = None
+        next_sequence = 0
         current_timestamp = None
         frame_start = None
         data_count = 0
@@ -50,13 +52,16 @@ class RadarParser:
             if line.startswith('START,'):
                 if current_frame is not None and frame_start is not None:
                     self.frame_index[current_frame] = {
+                        'frame_number': device_frame,
                         'start': frame_start,
                         'end': line_idx - 1,
                         'ts': current_timestamp,
                         'count': data_count
                     }
                 m = re.search(r'FrameNb:(\d+)', line)
-                current_frame = int(m.group(1)) if m else len(self.frame_index)
+                device_frame = int(m.group(1)) if m else None
+                current_frame = next_sequence
+                next_sequence += 1
                 current_timestamp = None
                 frame_start = line_idx + 1
                 data_count = 0
@@ -71,11 +76,14 @@ class RadarParser:
             elif line.startswith('END,'):
                 if current_frame is not None and frame_start is not None:
                     self.frame_index[current_frame] = {
+                        'frame_number': device_frame,
                         'start': frame_start,
                         'end': line_idx - 1,
                         'ts': current_timestamp,
                         'count': data_count
                     }
+                current_frame = None
+                frame_start = None
 
         if not self.frame_index:
             df = pd.read_csv(self.file_path, on_bad_lines='skip')
@@ -111,7 +119,8 @@ class RadarParser:
                         parts = parts[:header_len]
                     rows.append(parts)
             df = pd.DataFrame(rows, columns=self.header_line)
-            df['FrameNb'] = fnb
+            device_number = info['frame_number']
+            df['FrameNb'] = fnb if device_number is None else device_number
             df['Timestamp'] = info['ts']
 
         numeric_cols = ['ObjId', 'range', 'speed', 'angle', 'RCS', 'snr', 'X', 'Y']
@@ -680,7 +689,7 @@ class RadarPlayer(tk.Tk):
         self.ax.set_xlabel('Y坐标 (m)', fontsize=10)
         self.ax.set_ylabel('X坐标 (m)', fontsize=10)
         self.ax.grid(True, alpha=0.3)
-        self.title_text = self.ax.set_title(f"帧号: {self.current}", fontsize=12)
+        self.title_text = self.ax.set_title(f"帧序号: {self.current}", fontsize=12)
         # 绘制雷达原点
         self.origin = self.ax.scatter(0, 0, c='red', s=150, marker='o', zorder=10)
         # 初始化空散点
@@ -801,7 +810,7 @@ class RadarPlayer(tk.Tk):
         self.trajectory.draw(self.ax)
 
         # 标题 & 刷新
-        self.ax.set_title(f"帧号: {self.current}")
+        self.ax.set_title(f"帧序号: {self.current} | 设备帧号: {info.get('frame_number', self.current)}")
         self.canvas.draw()
     # 播放控制方法
     def toggle(self):
