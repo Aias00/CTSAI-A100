@@ -743,6 +743,8 @@ class RadarPlayer(tk.Tk):
         # 恢复基础画布设置
         self.ax.set_xlim(-50, 60)
         self.ax.set_ylim(-10, 120)
+        self.ax.set_xlabel('Y坐标 (m)', fontsize=10)
+        self.ax.set_ylabel('X坐标 (m)', fontsize=10)
         self.ax.grid(True)
         self.ax.scatter(0, 0, c='red', s=180, zorder=10)  # 雷达中心点
 
@@ -796,6 +798,14 @@ class RadarPlayer(tk.Tk):
                     zorder=3
                 )
                 count += 1
+
+        # Each redraw creates a new mappable; keep the distance legend aligned.
+        if self.cbar is not None:
+            show_distance = not df.empty and not self.cluster.enable_clustering.get()
+            self.cbar.ax.set_visible(show_distance)
+            if show_distance:
+                self.cbar.update_normal(self.scatter)
+                self.cbar.set_label('目标距离 (m)')
 
         # ===================== 轨迹绘制 =====================
         self.trajectory.draw(self.ax)
