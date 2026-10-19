@@ -213,7 +213,7 @@ class KalmanTracker:
             return df
         
         current_points = df[['X', 'Y']].values
-        current_ids = []
+        current_ids = [None] * len(current_points)
 
         # 1. 预测所有已跟踪目标的位置
         for track_id in list(self.tracked_targets.keys()):
@@ -229,23 +229,21 @@ class KalmanTracker:
             # 匈牙利匹配
             row_ind, col_ind = linear_sum_assignment(dist_matrix)
             # 匹配结果处理
-            matched_tracks = set()
             for r, c in zip(row_ind, col_ind):
                 if dist_matrix[r, c] < self.match_thresh.get():
                     track_id = track_ids[c]
-                    current_ids.append(track_id)
+                    current_ids[r] = track_id
                     # 卡尔曼更新
                     self.tracked_targets[track_id] = self._update(self.tracked_targets[track_id], current_points[r])
                     self.tracked_targets[track_id]['lost_frames'] = 0
                     # 记录历史坐标（X/Y顺序不变，绘图时对调）
                     self.tracked_targets[track_id]['history'].append((current_points[r][0], current_points[r][1]))
-                    matched_tracks.add(track_id)
             # 未匹配的当前点，新建跟踪
             for r in range(len(current_points)):
-                if r not in row_ind or dist_matrix[r, col_ind[list(row_ind).index(r)]] >= self.match_thresh.get():
+                if current_ids[r] is None:
                     track_id = self.next_id
                     self.next_id += 1
-                    current_ids.append(track_id)
+                    current_ids[r] = track_id
                     x, y = current_points[r]
                     self.tracked_targets[track_id] = self._init_kalman(x, y)
                     self.tracked_targets[track_id]['lost_frames'] = 0
@@ -253,10 +251,10 @@ class KalmanTracker:
                     self.tracked_targets[track_id]['history'].append((x, y))
         else:
             # 无跟踪目标，全部新建
-            for x, y in current_points:
+            for r, (x, y) in enumerate(current_points):
                 track_id = self.next_id
                 self.next_id += 1
-                current_ids.append(track_id)
+                current_ids[r] = track_id
                 self.tracked_targets[track_id] = self._init_kalman(x, y)
                 self.tracked_targets[track_id]['lost_frames'] = 0
                 self.tracked_targets[track_id]['history'] = deque(maxlen=3000)
