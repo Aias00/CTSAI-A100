@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 import re
+import warnings
 from datetime import datetime
 import os
 from collections import deque, defaultdict
@@ -76,6 +77,24 @@ class RadarParser:
                         'ts': current_timestamp,
                         'count': data_count
                     }
+
+                current_frame = None
+                frame_start = None
+
+        for info in self.frame_index.values():
+            info['incomplete'] = False
+        if current_frame is not None and frame_start is not None:
+            device_match = re.search(r'FrameNb:(\d+)', self.all_lines[frame_start - 1])
+            self.frame_index[current_frame] = {
+                'frame_number': int(device_match.group(1)) if device_match else None,
+                'start': frame_start,
+                'end': len(self.all_lines) - 1,
+                'ts': current_timestamp,
+                'count': data_count,
+                'incomplete': True
+            }
+            warnings.warn('Retaining incomplete final radar frame (missing END marker).',
+                          RuntimeWarning, stacklevel=2)
 
         if not self.frame_index:
             df = pd.read_csv(self.file_path, on_bad_lines='skip')
