@@ -1,5 +1,6 @@
 function result = cfar_2d(powerMap, cfarOpts)
 %CFAR_2D Two-dimensional CA/OS/GOCA/SOCA/VI-CFAR.
+validate_cfar_pfa(cfarOpts.pfa);
 trainR = cfarOpts.training_cells(1);
 trainD = cfarOpts.training_cells(2);
 guardR = cfarOpts.guard_cells(1);

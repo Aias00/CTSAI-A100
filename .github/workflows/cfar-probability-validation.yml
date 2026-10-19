@@ -1,0 +1,14 @@
+name: CFAR input validation
+on:
+  push:
+    branches: [fix/cfar-probability-validation]
+  pull_request:
+    paths:
+      - 'community/projects/**'
+jobs:
+  octave:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends octave
+      - run: octave --no-gui --quiet --eval "addpath('community/projects/a100-matlab-adc-signal-processing/tests'); run_cfar_input_tests; run_configuration_tests;"
