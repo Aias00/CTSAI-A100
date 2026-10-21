@@ -1,0 +1,12 @@
+a100-radar-viewer-enhanced — community derivative maintained by Aias00.
+Based on Super-Radar/CTSAI-A100, Python雷达可视化工具示例/radarViewer.py.
+Upstream repository: https://github.com/Super-Radar/CTSAI-A100
+Upstream license: Apache License 2.0 (included as LICENSE).
+Original code and attribution remain with their respective contributors.
+
+Changes by Aias00 (2026): parsing validation, file-order frame identity,
+EOF frame handling, observation-row track IDs, tracking cache and empty-frame
+state, capture-time Kalman prediction, gated assignment, colorbar lifecycle;
+regression tests, standalone project documentation, public sample copy and demo.
+Enhancement source: PR #137, commit 0898083cc7b587d1ccbda11afe5686867af011de.
+This project is independently maintained and is not an official SuperRadar tool.
